@@ -1,13 +1,17 @@
 using System.IO;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
 using Microsoft.VisualBasic.FileIO;
 
 namespace ClaudeProfiles.Services;
 
+public enum AppKind { Claude, Codex }
+
 public sealed class ProfileRecord
 {
     public string Id { get; set; } = Guid.NewGuid().ToString("N")[..10];
+    public AppKind App { get; set; } = AppKind.Claude;
     public string Name { get; set; } = "";
     public string Color { get; set; } = "#D97757";
     public string DataDir { get; set; } = "";
@@ -17,7 +21,7 @@ public sealed class ProfileRecord
 
 public static class ProfileStore
 {
-    static readonly JsonSerializerOptions Json = new() { WriteIndented = true };
+    static readonly JsonSerializerOptions Json = new() { WriteIndented = true, Converters = { new JsonStringEnumConverter() } };
 
     public static readonly string[] Palette =
     {
@@ -37,7 +41,7 @@ public static class ProfileStore
         {
             try
             {
-                return JsonSerializer.Deserialize<List<ProfileRecord>>(File.ReadAllText(AppPaths.ProfilesFile)) ?? new();
+                return JsonSerializer.Deserialize<List<ProfileRecord>>(File.ReadAllText(AppPaths.ProfilesFile), Json) ?? new();
             }
             catch (Exception ex)
             {
@@ -64,9 +68,11 @@ public static class ProfileStore
             foreach (var dir in Directory.GetDirectories(parent))
             {
                 if (string.Equals(AppPaths.Normalize(dir), AppPaths.Normalize(AppPaths.ProfilesDir), StringComparison.OrdinalIgnoreCase)) continue;
-                if (!File.Exists(Path.Combine(dir, "Local State")) && !File.Exists(Path.Combine(dir, "config.json"))) continue;
+                var isCodex = Directory.Exists(CodexApp.HomeDir(dir));
+                if (!isCodex && !File.Exists(Path.Combine(dir, "Local State")) && !File.Exists(Path.Combine(dir, "config.json"))) continue;
                 adopted.Add(new ProfileRecord
                 {
+                    App = isCodex ? AppKind.Codex : AppKind.Claude,
                     Name = Regex.Replace(Path.GetFileName(dir), @"(?<=[A-Za-z])(?=\d)", " "),
                     DataDir = AppPaths.Normalize(dir),
                     Color = Palette[(1 + i++) % Palette.Length],
@@ -84,14 +90,15 @@ public static class ProfileStore
         File.Move(tmp, AppPaths.ProfilesFile, overwrite: true);
     }
 
-    public static ProfileRecord Create(List<ProfileRecord> profiles, string name, string color)
+    public static ProfileRecord Create(List<ProfileRecord> profiles, string name, string color, AppKind app)
     {
-        var folder = SafeFolderName(name);
+        // Codex profiles get their own folder name so a Claude "Work" and a Codex "Work" can sit side by side.
+        var folder = SafeFolderName(name) + (app == AppKind.Codex ? " (Codex)" : "");
         var dir = Path.Combine(AppPaths.ProfilesDir, folder);
         for (int n = 2; Directory.Exists(dir); n++) dir = Path.Combine(AppPaths.ProfilesDir, $"{folder} {n}");
         Directory.CreateDirectory(dir);
 
-        var record = new ProfileRecord { Name = name.Trim(), Color = color, DataDir = AppPaths.Normalize(dir) };
+        var record = new ProfileRecord { App = app, Name = name.Trim(), Color = color, DataDir = AppPaths.Normalize(dir) };
         profiles.Add(record);
         Save(profiles);
         return record;

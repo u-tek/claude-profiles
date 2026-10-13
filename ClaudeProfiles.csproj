@@ -10,7 +10,7 @@
     <AssemblyName>ClaudeProfiles</AssemblyName>
     <RootNamespace>ClaudeProfiles</RootNamespace>
     <Product>Claude Profiles</Product>
-    <Version>1.1.0</Version>
+    <Version>1.2.0</Version>
     <ApplicationIcon Condition="Exists('Assets\app.ico')">Assets\app.ico</ApplicationIcon>
     <ApplicationManifest>app.manifest</ApplicationManifest>
   </PropertyGroup>

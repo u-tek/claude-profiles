@@ -23,9 +23,12 @@ public sealed class CardTemplateSelector : DataTemplateSelector
 public partial class MainWindow : Window
 {
     readonly List<ProfileRecord> _records;
-    readonly ObservableCollection<ProfileItem> _items = new();
+    readonly ObservableCollection<ProfileItem> _claudeItems = new(), _codexItems = new();
     readonly ProfileItem _main = new(ItemKind.Main);
+    readonly ProfileItem _mainCodex = new(ItemKind.Main, app: AppKind.Codex);
     readonly ProfileItem _addTile = new(ItemKind.AddTile);
+    readonly ProfileItem _addCodexTile = new(ItemKind.AddTile, app: AppKind.Codex);
+    readonly bool _codexInstalled = CodexApp.IsInstalled;
     readonly SignInRouter _router;
     readonly DispatcherTimer _timer;
     volatile IReadOnlyList<SignInTarget> _waiting = Array.Empty<SignInTarget>();
@@ -35,9 +38,16 @@ public partial class MainWindow : Window
     // Dialog state
     ProfileRecord? _editing;
     string _pickedColor = ProfileStore.Palette[0];
+    AppKind _pickedApp;
     Action? _confirmAction;
 
     public IReadOnlyList<ProfileRecord> Records => _records;
+
+    ObservableCollection<ProfileItem> ItemsFor(AppKind app) => app == AppKind.Codex ? _codexItems : _claudeItems;
+    ProfileItem AddTileFor(AppKind app) => app == AppKind.Codex ? _addCodexTile : _addTile;
+
+    /// <summary>Every card that stands for an app instance (the "new profile" tiles left out).</summary>
+    IEnumerable<ProfileItem> Cards => _claudeItems.Concat(_codexItems).Where(i => i.Kind != ItemKind.AddTile);
 
     public MainWindow()
     {
@@ -46,10 +56,14 @@ public partial class MainWindow : Window
         Icon = Icons.AppMark(64);
 
         _records = ProfileStore.Load();
-        _items.Add(_main);
-        foreach (var r in _records) _items.Add(new ProfileItem(ItemKind.Profile, r));
-        _items.Add(_addTile);
-        Cards.ItemsSource = _items;
+        _claudeItems.Add(_main);
+        if (_codexInstalled) _codexItems.Add(_mainCodex);
+        foreach (var r in _records) ItemsFor(r.App).Add(new ProfileItem(ItemKind.Profile, r));
+        _claudeItems.Add(_addTile);
+        _codexItems.Add(_addCodexTile);
+        ClaudeCards.ItemsSource = _claudeItems;
+        CodexCards.ItemsSource = _codexItems;
+        UpdateSections();
 
         _router = new SignInRouter(() => _waiting);
         _router.Routed += t => Dispatcher.BeginInvoke(() => OnRouted(t));
@@ -69,29 +83,37 @@ public partial class MainWindow : Window
 
     // ---------- Live state ----------
 
+    void UpdateSections()
+    {
+        var showCodex = _codexInstalled || _records.Any(r => r.App == AppKind.Codex);
+        CodexSection.Visibility = showCodex ? Visibility.Visible : Visibility.Collapsed;
+        ClaudeHeading.Visibility = showCodex ? Visibility.Visible : Visibility.Collapsed;
+        ClaudeCards.Margin = new Thickness(-8, showCodex ? 10 : 22, -8, 0);
+        IntroText.Text = $"Each profile is its own {(showCodex ? "Claude or Codex" : "Claude")}, with a separate sign-in, " +
+                         "chats, folders and settings. Open as many as you like, side by side.";
+    }
+
     async Task RefreshAsync()
     {
         if (_refreshing) return;
         _refreshing = true;
         try
         {
-            var dirs = _items.Where(i => i.Kind != ItemKind.AddTile).Select(i => i.DataDir).ToList();
+            var cards = Cards.ToList();
             var (procs, states) = await Task.Run(() =>
             {
                 var p = ClaudeProcesses.Snapshot();
-                var s = dirs.ToDictionary(d => d, ProfileInspector.Read, StringComparer.OrdinalIgnoreCase);
+                var s = cards.ToDictionary(c => c, ReadState);
                 return (p, s);
             });
 
-            foreach (var item in _items.Where(i => i.Kind != ItemKind.AddTile))
+            foreach (var item in cards)
             {
-                item.IsRunning = item.IsMain ? ClaudeProcesses.MainClaude(procs) != null : ClaudeProcesses.MainFor(procs, item.DataDir) != null;
-                if (states.TryGetValue(item.DataDir, out var st))
-                {
-                    item.IsSignedIn = st.SignedIn;
-                    item.AccountUuid = st.AccountUuid;
-                    item.LastAttempt = st.LastSignInAttempt;
-                }
+                item.IsRunning = ProcessFor(item, procs) != null;
+                var st = states[item];
+                item.IsSignedIn = st.SignedIn;
+                item.AccountUuid = st.AccountUuid;
+                item.LastAttempt = st.LastSignInAttempt;
             }
 
             MarkSharedAccounts();
@@ -101,9 +123,21 @@ public partial class MainWindow : Window
         finally { _refreshing = false; }
     }
 
+    static ProfileState ReadState(ProfileItem item) =>
+        !item.IsCodex ? ProfileInspector.Read(item.DataDir)
+        : ProfileInspector.ReadCodex(item.IsMain ? CodexApp.MainHome : CodexApp.HomeDir(item.DataDir));
+
+    static ClaudeProcess? ProcessFor(ProfileItem item, List<ClaudeProcess> procs) => (item.IsMain, item.IsCodex) switch
+    {
+        (true, false) => ClaudeProcesses.MainClaude(procs),
+        (true, true) => ClaudeProcesses.MainCodex(procs),
+        (false, false) => ClaudeProcesses.MainFor(procs, item.DataDir),
+        (false, true) => ClaudeProcesses.MainFor(procs, AppPaths.Normalize(CodexApp.UserDataDir(item.DataDir))),
+    };
+
     void MarkSharedAccounts()
     {
-        var cards = _items.Where(i => i.Kind != ItemKind.AddTile).ToList();
+        var cards = Cards.ToList();
         foreach (var item in cards)
         {
             var others = item.IsSignedIn && item.AccountUuid != null
@@ -116,8 +150,9 @@ public partial class MainWindow : Window
     void UpdateWaiting()
     {
         // Signed-out profiles wait for a sign-in; signed-in ones only briefly after starting a re-sign-in.
+        // Codex signs in through a localhost callback that reaches the right window by itself, so it's never routed.
         var recent = DateTime.Now - TimeSpan.FromMinutes(5);
-        var waiting = _items
+        var waiting = _claudeItems
             .Where(i => i.IsProfile && i.IsRunning && (!i.IsSignedIn || i.LastAttempt > recent))
             .ToList();
 
@@ -151,23 +186,25 @@ public partial class MainWindow : Window
 
     public void OpenProfile(string id)
     {
-        var record = _records.FirstOrDefault(r => r.Id == id);
-        var item = _items.FirstOrDefault(i => i.Record == record);
-        if (record == null || item == null) { ((App)Application.Current).ShowWindow(); return; }
+        var item = Cards.FirstOrDefault(i => i.Record?.Id == id);
+        if (item == null) { ((App)Application.Current).ShowWindow(); return; }
         Open(item);
     }
 
     void Open(ProfileItem item)
     {
-        if (!ClaudeApp.IsInstalled)
+        if (item.IsCodex ? !CodexApp.IsInstalled : !ClaudeApp.IsInstalled)
         {
             ((App)Application.Current).ShowWindow();
-            NotInstalled.Visibility = Visibility.Visible;
+            if (item.IsCodex) ShowToast("Codex isn't installed. Get it from the Microsoft Store.");
+            else NotInstalled.Visibility = Visibility.Visible;
             return;
         }
         try
         {
-            ClaudeApp.Launch(item.IsMain ? null : item.DataDir);
+            if (!item.IsCodex) ClaudeApp.Launch(item.IsMain ? null : item.DataDir);
+            else if (item.IsMain) CodexApp.LaunchMain();
+            else CodexApp.Launch(item.DataDir);
             if (item.Record != null)
             {
                 item.Record.LastOpened = DateTime.Now;
@@ -177,7 +214,7 @@ public partial class MainWindow : Window
         }
         catch (Exception ex)
         {
-            ShowToast("Couldn't open Claude: " + ex.Message);
+            ShowToast($"Couldn't open {item.AppName}: " + ex.Message);
         }
         DelayedRefresh();
     }
@@ -239,7 +276,7 @@ public partial class MainWindow : Window
         }
         else
         {
-            Add("", "Open data folder", () => Reveal(AppPaths.MainClaudeData));
+            Add("", "Open data folder", () => Reveal(item.DataDir));
         }
         menu.IsOpen = true;
     }
@@ -252,8 +289,7 @@ public partial class MainWindow : Window
 
     void QuitProfile(ProfileItem item)
     {
-        var procs = ClaudeProcesses.Snapshot();
-        if (ClaudeProcesses.MainFor(procs, item.DataDir) is { } p) ClaudeProcesses.KillTree(p.Pid);
+        if (ProcessFor(item, ClaudeProcesses.Snapshot()) is { } p) ClaudeProcesses.KillTree(p.Pid);
         DelayedRefresh();
     }
 
@@ -271,7 +307,8 @@ public partial class MainWindow : Window
                 {
                     Shortcuts.RemoveForProfile(r);
                     ProfileStore.Delete(_records, r);
-                    _items.Remove(item);
+                    ItemsFor(item.App).Remove(item);
+                    UpdateSections();
                     ShowToast($"Deleted {r.Name}");
                 }
                 catch (Exception ex) { ShowToast("Couldn't delete: " + ex.Message); }
@@ -313,15 +350,18 @@ public partial class MainWindow : Window
 
     // ---------- New / edit dialog ----------
 
-    void NewProfile_Click(object sender, RoutedEventArgs e) => ShowEditDialog(null);
+    // The header button starts a Claude profile; each section's tile starts one for its own app.
+    void NewProfile_Click(object sender, RoutedEventArgs e) =>
+        ShowEditDialog(null, (sender as FrameworkElement)?.DataContext is ProfileItem { Kind: ItemKind.AddTile } tile ? tile.App : AppKind.Claude);
 
-    void ShowEditDialog(ProfileRecord? editing)
+    void ShowEditDialog(ProfileRecord? editing, AppKind app = AppKind.Claude)
     {
         _editing = editing;
         EditTitle.Text = editing == null ? "New profile" : "Edit profile";
-        EditSubtitle.Text = editing == null
-            ? "A fresh Claude with its own sign-in, chats, folders and settings."
-            : "Change how this profile looks. Its sign-in and data stay as they are.";
+        AppPicker.Visibility = editing == null && _codexInstalled ? Visibility.Visible : Visibility.Collapsed;
+        (app == AppKind.Codex ? AppCodex : AppClaude).IsChecked = true;
+        _pickedApp = app;
+        UpdateEditSubtitle();
         EditOk.Content = editing == null ? "Create and open" : "Save";
         NameBox.Text = editing?.Name ?? "";
         NameError.Visibility = Visibility.Collapsed;
@@ -351,16 +391,28 @@ public partial class MainWindow : Window
         Dispatcher.BeginInvoke(() => { NameBox.Focus(); NameBox.SelectAll(); }, DispatcherPriority.Input);
     }
 
+    void AppPick_Checked(object sender, RoutedEventArgs e)
+    {
+        _pickedApp = sender == AppCodex ? AppKind.Codex : AppKind.Claude;
+        UpdateEditSubtitle();
+    }
+
+    void UpdateEditSubtitle() =>
+        EditSubtitle.Text = _editing == null
+            ? $"A fresh {_pickedApp} with its own sign-in, chats, folders and settings."
+            : "Change how this profile looks. Its sign-in and data stay as they are.";
+
     void NameBox_TextChanged(object sender, TextChangedEventArgs e) => NameError.Visibility = Visibility.Collapsed;
 
     void EditOk_Click(object sender, RoutedEventArgs e)
     {
         var name = NameBox.Text.Trim();
+        var app = _editing?.App ?? _pickedApp;
         string? error = null;
         if (name.Length == 0) error = "Give the profile a name.";
-        else if (name.Equals("Main Claude", StringComparison.OrdinalIgnoreCase) ||
-                 _records.Any(r => r != _editing && r.Name.Equals(name, StringComparison.OrdinalIgnoreCase)))
-            error = "You already have a profile with that name.";
+        else if (name.Equals(ProfileItem.MainName(app), StringComparison.OrdinalIgnoreCase) ||
+                 _records.Any(r => r != _editing && r.App == app && r.Name.Equals(name, StringComparison.OrdinalIgnoreCase)))
+            error = $"You already have a {app} profile with that name.";
         if (error != null)
         {
             NameError.Text = error;
@@ -371,9 +423,11 @@ public partial class MainWindow : Window
 
         if (_editing == null)
         {
-            var record = ProfileStore.Create(_records, name, _pickedColor);
+            var record = ProfileStore.Create(_records, name, _pickedColor, app);
             var item = new ProfileItem(ItemKind.Profile, record);
-            _items.Insert(_items.IndexOf(_addTile), item);
+            var items = ItemsFor(app);
+            items.Insert(items.IndexOf(AddTileFor(app)), item);
+            UpdateSections();
             if (ShortcutBox.IsChecked == true) CreateShortcutQuietly(record);
             HideOverlay();
             Open(item);
@@ -390,7 +444,7 @@ public partial class MainWindow : Window
                 Shortcuts.RemoveForProfile(_editing, oldName);
                 CreateShortcutQuietly(_editing);
             }
-            _items.FirstOrDefault(i => i.Record == _editing)?.Refresh();
+            Cards.FirstOrDefault(i => i.Record == _editing)?.Refresh();
             MarkSharedAccounts();
             HideOverlay();
         }

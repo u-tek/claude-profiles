@@ -6,21 +6,23 @@ public static class Shortcuts
 {
     static string ExePath => Environment.ProcessPath!;
 
-    public static string ProfileShortcutPath(ProfileRecord p) =>
-        Path.Combine(AppPaths.Desktop, $"Claude - {Sanitize(p.Name)}.lnk");
+    public static string ProfileShortcutPath(ProfileRecord p) => ProfileShortcutPath(p.App, p.Name);
+
+    static string ProfileShortcutPath(AppKind app, string name) =>
+        Path.Combine(AppPaths.Desktop, $"{app} - {Sanitize(name)}.lnk");
 
     public static bool HasDesktopShortcut(ProfileRecord p) => File.Exists(ProfileShortcutPath(p));
 
     /// <summary>Desktop shortcut that opens this profile through the launcher (so sign-in routing is active).</summary>
     public static void CreateForProfile(ProfileRecord p) =>
-        Create(ProfileShortcutPath(p), ExePath, $"--open {p.Id}", Icons.ProfileIcon(p), $"Open Claude as \"{p.Name}\"");
+        Create(ProfileShortcutPath(p), ExePath, $"--open {p.Id}", Icons.ProfileIcon(p), $"Open {p.App} as \"{p.Name}\"");
 
     public static void RemoveForProfile(ProfileRecord p, string? previousName = null)
     {
         foreach (var name in new[] { p.Name, previousName })
         {
             if (name == null) continue;
-            var path = Path.Combine(AppPaths.Desktop, $"Claude - {Sanitize(name)}.lnk");
+            var path = ProfileShortcutPath(p.App, name);
             try { if (File.Exists(path)) File.Delete(path); } catch { }
         }
     }

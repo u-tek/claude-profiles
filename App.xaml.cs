@@ -17,6 +17,14 @@ public partial class App : Application
         base.OnStartup(e);
         var args = e.Args;
 
+        // Running inside Codex's package to start a Codex profile (see CodexApp.Launch).
+        if (args.Length == 4 && args[0] == "--start-codex")
+        {
+            CodexApp.StartInPackage(args[1], args[2], args[3]);
+            Shutdown();
+            return;
+        }
+
         if (args.Length == 2 && args[0] == "--export-icon")
         {
             Icons.WriteIco(args[1], Icons.AppMark);
@@ -126,7 +134,8 @@ public partial class App : Application
         foreach (var p in _window.Records)
         {
             var id = p.Id;
-            menu.Items.Add("Open " + p.Name, null, (_, _) => Dispatcher.Invoke(() => _window.OpenProfile(id)));
+            var label = "Open " + p.Name + (p.App == AppKind.Codex ? " (Codex)" : "");
+            menu.Items.Add(label, null, (_, _) => Dispatcher.Invoke(() => _window.OpenProfile(id)));
         }
         if (_window.Records.Count > 0) menu.Items.Add(new Forms.ToolStripSeparator());
         menu.Items.Add("Show Claude Profiles", null, (_, _) => Dispatcher.Invoke(ShowWindow));

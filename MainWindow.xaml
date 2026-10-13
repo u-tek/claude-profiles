@@ -39,6 +39,43 @@
       </Setter>
     </Style>
 
+    <!-- Claude / Codex picker in the profile dialog -->
+    <Style x:Key="Segment" TargetType="RadioButton">
+      <Setter Property="Cursor" Value="Hand" />
+      <Setter Property="Margin" Value="0,0,8,0" />
+      <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="RadioButton">
+            <Border x:Name="bd" CornerRadius="9" Padding="18,8" BorderThickness="1"
+                    Background="{DynamicResource Surface}" BorderBrush="{DynamicResource LineStrong}">
+              <ContentPresenter x:Name="cp" TextElement.FontSize="13.5" TextElement.FontWeight="SemiBold"
+                                TextElement.Foreground="{DynamicResource Ink}" />
+            </Border>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsMouseOver" Value="True">
+                <Setter TargetName="bd" Property="Background" Value="{DynamicResource Hover}" />
+              </Trigger>
+              <Trigger Property="IsChecked" Value="True">
+                <Setter TargetName="bd" Property="Background" Value="{DynamicResource AccentSoft}" />
+                <Setter TargetName="bd" Property="BorderBrush" Value="{DynamicResource Accent}" />
+                <Setter TargetName="cp" Property="TextElement.Foreground" Value="{DynamicResource Accent}" />
+              </Trigger>
+              <Trigger Property="IsKeyboardFocused" Value="True">
+                <Setter TargetName="bd" Property="BorderBrush" Value="{DynamicResource Accent}" />
+              </Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+
+    <Style x:Key="SectionHeading" TargetType="TextBlock">
+      <Setter Property="FontFamily" Value="{StaticResource Serif}" />
+      <Setter Property="FontSize" Value="20" />
+      <Setter Property="Margin" Value="0,30,0,0" />
+    </Style>
+
     <!-- Profile card -->
     <DataTemplate x:Key="CardTemplate" DataType="{x:Type local:ProfileItem}">
       <Border x:Name="card" Width="292" MinHeight="186" Margin="8" Padding="18,16" CornerRadius="14"
@@ -129,7 +166,7 @@
                 </Border>
                 <TextBlock Text="New profile" FontWeight="SemiBold" FontSize="14" Margin="0,12,0,0" HorizontalAlignment="Center"
                            Foreground="{DynamicResource Ink}" />
-                <TextBlock Text="Another account, fully separate" FontSize="12.5" Margin="0,3,0,0" HorizontalAlignment="Center"
+                <TextBlock Text="{Binding AddCaption}" FontSize="12.5" Margin="0,3,0,0" HorizontalAlignment="Center"
                            Foreground="{DynamicResource Muted}" />
               </StackPanel>
             </Grid>
@@ -212,9 +249,8 @@
           <Grid>
             <StackPanel Margin="0,0,180,0">
               <TextBlock Text="Profiles" FontFamily="{StaticResource Serif}" FontSize="32" />
-              <TextBlock Foreground="{DynamicResource Muted}" FontSize="14" TextWrapping="Wrap" Margin="0,8,0,0" LineHeight="21" MaxWidth="600"
-                         HorizontalAlignment="Left"
-                         Text="Each profile is its own Claude, with a separate sign-in, chats, folders and settings. Open as many as you like, side by side." />
+              <TextBlock x:Name="IntroText" Foreground="{DynamicResource Muted}" FontSize="14" TextWrapping="Wrap" Margin="0,8,0,0" LineHeight="21" MaxWidth="600"
+                         HorizontalAlignment="Left" />
             </StackPanel>
             <Button Style="{StaticResource AccentButton}" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,6,0,0"
                     Padding="16,9" Click="NewProfile_Click">
@@ -236,13 +272,25 @@
             </DockPanel>
           </Border>
 
-          <ItemsControl x:Name="Cards" Margin="-8,22,-8,0" ItemTemplateSelector="{StaticResource CardSelector}" Focusable="False">
+          <TextBlock x:Name="ClaudeHeading" Text="Claude" Style="{StaticResource SectionHeading}" Visibility="Collapsed" />
+          <ItemsControl x:Name="ClaudeCards" Margin="-8,22,-8,0" ItemTemplateSelector="{StaticResource CardSelector}" Focusable="False">
             <ItemsControl.ItemsPanel>
               <ItemsPanelTemplate>
                 <WrapPanel />
               </ItemsPanelTemplate>
             </ItemsControl.ItemsPanel>
           </ItemsControl>
+
+          <StackPanel x:Name="CodexSection" Visibility="Collapsed">
+            <TextBlock Text="Codex" Style="{StaticResource SectionHeading}" />
+            <ItemsControl x:Name="CodexCards" Margin="-8,10,-8,0" ItemTemplateSelector="{StaticResource CardSelector}" Focusable="False">
+              <ItemsControl.ItemsPanel>
+                <ItemsPanelTemplate>
+                  <WrapPanel />
+                </ItemsPanelTemplate>
+              </ItemsControl.ItemsPanel>
+            </ItemsControl>
+          </StackPanel>
         </StackPanel>
       </ScrollViewer>
 
@@ -259,6 +307,13 @@
             <TextBlock x:Name="EditTitle" Text="New profile" FontFamily="{StaticResource Serif}" FontSize="24" />
             <TextBlock x:Name="EditSubtitle" Foreground="{DynamicResource Muted}" TextWrapping="Wrap" Margin="0,7,0,0" LineHeight="20" FontSize="13.5"
                        Text="A fresh Claude with its own sign-in, chats, folders and settings." />
+            <StackPanel x:Name="AppPicker">
+              <TextBlock Text="App" FontWeight="SemiBold" FontSize="12.5" Margin="0,22,0,7" />
+              <StackPanel Orientation="Horizontal">
+                <RadioButton x:Name="AppClaude" Style="{StaticResource Segment}" Content="Claude" GroupName="app" Checked="AppPick_Checked" />
+                <RadioButton x:Name="AppCodex" Style="{StaticResource Segment}" Content="Codex" GroupName="app" Checked="AppPick_Checked" />
+              </StackPanel>
+            </StackPanel>
             <TextBlock Text="Name" FontWeight="SemiBold" FontSize="12.5" Margin="0,22,0,7" />
             <TextBox x:Name="NameBox" local:Ui.Placeholder="Work, Personal, Client…" MaxLength="40" TextChanged="NameBox_TextChanged" />
             <TextBlock x:Name="NameError" Foreground="{DynamicResource Danger}" FontSize="12" Margin="2,6,0,0" Visibility="Collapsed" />

@@ -10,6 +10,7 @@ namespace ClaudeProfiles.Services;
 public static class Icons
 {
     public static readonly Color Clay = Color.FromRgb(0xD9, 0x77, 0x57);
+    public static readonly Color Ink = Color.FromRgb(0x3F, 0x3F, 0x46);
 
     public static string Initial(string name)
     {

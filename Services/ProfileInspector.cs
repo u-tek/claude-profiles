@@ -32,6 +32,11 @@ public static class ProfileInspector
         return new ProfileState(signedIn, account, LastSignInAttempt(dataDir));
     }
 
+    /// <summary>Codex signs in with a localhost callback (no link to route), so only sign-in state matters.
+    /// Codex writes auth.json into its CODEX_HOME on sign-in and removes it on sign-out.</summary>
+    public static ProfileState ReadCodex(string codexHome) =>
+        new(File.Exists(Path.Combine(codexHome, "auth.json")), null, null);
+
     /// <summary>When this instance last sent the user to the browser to sign in.</summary>
     public static DateTime? LastSignInAttempt(string dataDir)
     {

@@ -12,21 +12,28 @@ public sealed class ProfileItem : INotifyPropertyChanged
 {
     public ItemKind Kind { get; }
     public ProfileRecord? Record { get; }
+    public AppKind App { get; }
 
-    public ProfileItem(ItemKind kind, ProfileRecord? record = null)
+    public ProfileItem(ItemKind kind, ProfileRecord? record = null, AppKind app = AppKind.Claude)
     {
         Kind = kind;
         Record = record;
+        App = record?.App ?? app;
     }
 
     public bool IsMain => Kind == ItemKind.Main;
     public bool IsProfile => Kind == ItemKind.Profile;
+    public bool IsCodex => App == AppKind.Codex;
+    public string AppName => App.ToString();
 
-    public string Name => IsMain ? "Main Claude" : Record?.Name ?? "";
+    public string Name => IsMain ? MainName(App) : Record?.Name ?? "";
+    public static string MainName(AppKind app) => $"Main {app}";
     public string Initial => Icons.Initial(Name);
-    public string DataDir => IsMain ? AppPaths.MainClaudeData : Record!.DataDir;
-    public Brush AvatarBrush => new SolidColorBrush(IsMain ? Icons.Clay : Icons.ParseColor(Record!.Color));
-    public string Caption => IsMain ? "Your regular Claude app" : LastOpenedText;
+    /// <summary>The profile's folder, or for the regular app, where it keeps its sign-in.</summary>
+    public string DataDir => !IsMain ? Record!.DataDir : IsCodex ? CodexApp.MainHome : AppPaths.MainClaudeData;
+    public Brush AvatarBrush => new SolidColorBrush(!IsMain ? Icons.ParseColor(Record!.Color) : IsCodex ? Icons.Ink : Icons.Clay);
+    public string Caption => IsMain ? $"Your regular {AppName} app" : LastOpenedText;
+    public string AddCaption => $"Another {AppName}, fully separate";
 
     string LastOpenedText => Record?.LastOpened is { } t ? "Opened " + Ago(t) : "Never opened";
 
