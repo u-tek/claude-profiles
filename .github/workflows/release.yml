@@ -1,0 +1,35 @@
+# Pushing a tag like v1.2.0 builds ClaudeProfiles-Setup.exe and publishes it as a GitHub release.
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Build
+        shell: pwsh
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          dotnet publish ClaudeProfiles.csproj -c Release -p:Version=$($env:TAG.TrimStart('v')) -o dist
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          Rename-Item dist/ClaudeProfiles.exe ClaudeProfiles-Setup.exe
+
+      - name: Publish release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: gh release create $env:TAG dist/ClaudeProfiles-Setup.exe --title "Claude Profiles $env:TAG" --generate-notes

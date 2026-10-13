@@ -10,9 +10,19 @@
     <AssemblyName>ClaudeProfiles</AssemblyName>
     <RootNamespace>ClaudeProfiles</RootNamespace>
     <Product>Claude Profiles</Product>
-    <Version>1.0.0</Version>
+    <Version>1.1.0</Version>
     <ApplicationIcon Condition="Exists('Assets\app.ico')">Assets\app.ico</ApplicationIcon>
     <ApplicationManifest>app.manifest</ApplicationManifest>
+  </PropertyGroup>
+
+  <!-- `dotnet publish -c Release` makes one exe that runs without .NET installed and installs itself when opened. -->
+  <PropertyGroup Condition="'$(Configuration)' == 'Release'">
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <SelfContained>true</SelfContained>
+    <PublishSingleFile>true</PublishSingleFile>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
+    <DebugType>none</DebugType>
   </PropertyGroup>
 
   <ItemGroup>

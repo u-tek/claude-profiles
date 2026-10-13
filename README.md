@@ -7,11 +7,22 @@ Unofficial: not made by or affiliated with Anthropic.
 
 ## Install
 
+**[⬇ Download ClaudeProfiles-Setup.exe](https://github.com/u-tek/claude-profiles/releases/latest/download/ClaudeProfiles-Setup.exe)** and open it. That's it.
+
+It installs itself for your Windows account (no admin needed), adds Desktop and Start menu shortcuts, and opens.
+You only need the [Claude desktop app](https://claude.ai/download) installed. Nothing else, not even .NET.
+
+- **"Windows protected your PC"?** The app isn't code-signed, so SmartScreen warns about it the first time.
+  Click **More info → Run anyway**.
+- **Updating:** download and open the latest setup. It replaces the installed copy and keeps your profiles.
+- **Uninstalling:** Settings → Apps → Claude Profiles → Uninstall. Your profiles' Claude data in
+  `%USERPROFILE%\ClaudeProfiles` is kept; delete that folder too if you don't need it.
+
+To build from source instead, you need the .NET 8 SDK:
+
 ```powershell
 powershell -ExecutionPolicy Bypass -File install.ps1
 ```
-
-Installs to `%LOCALAPPDATA%\Programs\ClaudeProfiles` and adds Desktop and Start menu shortcuts. Needs the .NET 8 Desktop Runtime and the Claude desktop app.
 
 ## How it works
 
@@ -32,6 +43,7 @@ Installs to `%LOCALAPPDATA%\Programs\ClaudeProfiles` and adds Desktop and Start 
 |---|---|
 | `%USERPROFILE%\ClaudeProfiles\profiles.json` | Profile list (name, colour, data folder) |
 | `%USERPROFILE%\ClaudeProfiles\Profiles\<name>` | Each profile's Claude data |
+| `%LOCALAPPDATA%\Programs\ClaudeProfiles\ClaudeProfiles.exe` | The installed app |
 | `%LOCALAPPDATA%\ClaudeProfiles\launcher.log` | Launcher log, including every routed sign-in |
 
 Deleting a profile, or choosing **Start fresh**, moves its data to the Recycle Bin.
@@ -40,3 +52,8 @@ Deleting a profile, or choosing **Start fresh**, moves its data to the Recycle B
 
 `ClaudeProfiles.exe --screenshot out.png [--dark|--light] [--dialog]` renders the window to a PNG.
 `--probe-mode` arms the router for `claude://claude-profiles-probe` test links.
+
+`dotnet publish -c Release -o dist` builds the single self-contained exe. Run from anywhere other than the install
+folder, it installs itself; dev builds under `bin\` just run. To release, bump `<Version>` in the `.csproj` and push a
+matching tag (`git tag v1.2.0 && git push origin v1.2.0`). The Release workflow builds `ClaudeProfiles-Setup.exe` and
+publishes it.

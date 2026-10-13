@@ -34,6 +34,27 @@ public partial class App : Application
             return;
         }
 
+        if (args.Contains("--uninstall"))
+        {
+            Installer.Uninstall(quiet: args.Contains("--quiet"));
+            Shutdown();
+            return;
+        }
+
+        // The downloaded exe installs itself, then hands over to the installed copy.
+        if (Installer.IsPublishedBuild && !Installer.IsInstalledCopy)
+        {
+            try { Installer.InstallAndRelaunch(args); }
+            catch (Exception ex)
+            {
+                Log.Write("install failed: " + ex);
+                MessageBox.Show("Couldn't install Claude Profiles:\n\n" + ex.Message, "Claude Profiles",
+                    MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+            Shutdown();
+            return;
+        }
+
         var message = args.Length >= 2 && args[0] == "--open" ? "open:" + args[1] : "show";
         ProbeMode = args.Contains("--probe-mode");
 
@@ -52,6 +73,7 @@ public partial class App : Application
         _single.Listen(m => Dispatcher.Invoke(() => HandleMessage(m)));
         SetUpTray();
         Shortcuts.EnsureStartMenu();
+        if (Installer.IsInstalledCopy) Installer.Register();
 
         if (message.StartsWith("open:"))
         {
@@ -67,7 +89,8 @@ public partial class App : Application
     void HandleMessage(string m)
     {
         if (_window == null) return;
-        if (m.StartsWith("open:")) _window.OpenProfile(m[5..]);
+        if (m == "quit") Quit();
+        else if (m.StartsWith("open:")) _window.OpenProfile(m[5..]);
         else ShowWindow();
     }
 

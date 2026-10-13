@@ -25,11 +25,23 @@ public static class Shortcuts
         }
     }
 
-    public static void EnsureStartMenu()
+    static string StartMenuShortcut => Path.Combine(AppPaths.StartMenu, "Claude Profiles.lnk");
+    static string DesktopShortcut => Path.Combine(AppPaths.Desktop, "Claude Profiles.lnk");
+
+    public static void EnsureStartMenu() => CreateAppShortcut(StartMenuShortcut);
+
+    public static void EnsureDesktop() => CreateAppShortcut(DesktopShortcut);
+
+    public static void RemoveAppShortcuts()
     {
-        var path = Path.Combine(AppPaths.StartMenu, "Claude Profiles.lnk");
+        foreach (var path in new[] { StartMenuShortcut, DesktopShortcut })
+            try { if (File.Exists(path)) File.Delete(path); } catch { }
+    }
+
+    static void CreateAppShortcut(string path)
+    {
         try { Create(path, ExePath, "", Icons.AppIcon(), "Run separate Claude profiles side by side"); }
-        catch (Exception ex) { Log.Write("start menu shortcut failed: " + ex.Message); }
+        catch (Exception ex) { Log.Write($"app shortcut {path} failed: " + ex.Message); }
     }
 
     static void Create(string lnkPath, string target, string args, string icon, string description)
